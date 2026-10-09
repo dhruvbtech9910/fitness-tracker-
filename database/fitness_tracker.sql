@@ -54,7 +54,7 @@ CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NUll,
     role_id BIGINT NULL,
     role VARCHAR(50) DEFAULT 'Athlete',
     avatar VARCHAR(500) NULL,
