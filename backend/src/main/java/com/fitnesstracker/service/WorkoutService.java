@@ -1,11 +1,11 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.UserDao;
+import com.fitnesstracker.dao.WorkoutDao;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.entity.Workout;
 import com.fitnesstracker.entity.WorkoutExercise;
 import com.fitnesstracker.exception.ResourceNotFoundException;
-import com.fitnesstracker.repository.UserRepository;
-import com.fitnesstracker.repository.WorkoutRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -17,41 +17,44 @@ import java.util.Optional;
 
 /**
  * WorkoutService
- * Business logic for logging, retrieving, and calculating statistics for workouts.
+ * Business logic for logging, retrieving, and calculating statistics for workouts via JDBC WorkoutDao.
  */
 @Service
 public class WorkoutService {
 
     @Autowired
-    private WorkoutRepository workoutRepository;
+    private WorkoutDao workoutDao;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     /**
      * Retrieve all workouts ordered by newest first
      */
     public List<Workout> getAllWorkouts() {
-        return workoutRepository.findAllByOrderByIdDesc();
+        return workoutDao.findAll();
     }
 
     /**
      * Retrieve single workout by ID
      */
     public Workout getWorkoutById(Long id) {
-        return workoutRepository.findById(id)
+        return workoutDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Workout not found with id: " + id));
     }
 
     /**
-     * Create and log a new workout
+     * Create and log a new workout using JDBC transaction
      */
     public Workout createWorkout(Workout workout, String userEmail) {
+        Long userId = null;
+
         // Link to user if logged in
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
+                userId = user.getId();
                 workout.setUser(user);
 
                 // Increment user workout tally and burned calories
@@ -62,7 +65,7 @@ public class WorkoutService {
                 int currentTotalCal = user.getTotalCaloriesBurned() != null ? user.getTotalCaloriesBurned() : 0;
                 user.setTotalCaloriesBurned(currentTotalCal + calories);
 
-                userRepository.save(user);
+                userDao.update(user);
             }
         }
 
@@ -81,7 +84,7 @@ public class WorkoutService {
             workout.setExercisesCount(4);
         }
 
-        return workoutRepository.save(workout);
+        return workoutDao.create(workout, userId);
     }
 
     /**
@@ -100,7 +103,7 @@ public class WorkoutService {
         if (updates.getTargetMuscles() != null) workout.setTargetMuscles(updates.getTargetMuscles());
         if (updates.getDescription() != null) workout.setDescription(updates.getDescription());
 
-        return workoutRepository.save(workout);
+        return workoutDao.update(workout);
     }
 
     /**
@@ -108,14 +111,17 @@ public class WorkoutService {
      */
     public void deleteWorkout(Long id) {
         Workout workout = getWorkoutById(id);
-        workoutRepository.delete(workout);
+        boolean deleted = workoutDao.delete(workout.getId());
+        if (!deleted) {
+            throw new RuntimeException("Failed to delete workout with id: " + id);
+        }
     }
 
     /**
      * Calculate summary metrics across all logged workouts
      */
     public Map<String, Object> getWorkoutStats() {
-        List<Workout> workouts = workoutRepository.findAll();
+        List<Workout> workouts = workoutDao.findAll();
         int totalWorkouts = workouts.size();
         int totalMinutes = 0;
         int totalCalories = 0;

@@ -1,10 +1,10 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.GoalDao;
+import com.fitnesstracker.dao.UserDao;
 import com.fitnesstracker.entity.FitnessGoal;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.exception.ResourceNotFoundException;
-import com.fitnesstracker.repository.FitnessGoalRepository;
-import com.fitnesstracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -13,29 +13,29 @@ import java.util.Optional;
 
 /**
  * GoalService
- * Manages user fitness targets, milestone progress tracking, and goal completion.
+ * Manages user fitness targets, milestone progress tracking, and goal completion via JDBC GoalDao.
  */
 @Service
 public class GoalService {
 
     @Autowired
-    private FitnessGoalRepository goalRepository;
+    private GoalDao goalDao;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     /**
      * Retrieve all fitness goals
      */
     public List<FitnessGoal> getAllGoals() {
-        return goalRepository.findAllByOrderByIdDesc();
+        return goalDao.findAll();
     }
 
     /**
      * Retrieve goal by ID
      */
     public FitnessGoal getGoalById(Long id) {
-        return goalRepository.findById(id)
+        return goalDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Goal not found with id: " + id));
     }
 
@@ -43,13 +43,17 @@ public class GoalService {
      * Create a new fitness goal
      */
     public FitnessGoal createGoal(FitnessGoal goal, String userEmail) {
+        Long userId = null;
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
-            userOpt.ifPresent(goal::setUser);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
+            if (userOpt.isPresent()) {
+                userId = userOpt.get().getId();
+                goal.setUser(userOpt.get());
+            }
         }
 
         goal.calculateProgress();
-        return goalRepository.save(goal);
+        return goalDao.save(goal, userId);
     }
 
     /**
@@ -68,7 +72,7 @@ public class GoalService {
         if (updates.getProgress() != null) goal.setProgress(updates.getProgress());
 
         goal.calculateProgress();
-        return goalRepository.save(goal);
+        return goalDao.update(goal);
     }
 
     /**
@@ -76,6 +80,9 @@ public class GoalService {
      */
     public void deleteGoal(Long id) {
         FitnessGoal goal = getGoalById(id);
-        goalRepository.delete(goal);
+        boolean deleted = goalDao.delete(goal.getId());
+        if (!deleted) {
+            throw new RuntimeException("Failed to delete goal with id: " + id);
+        }
     }
 }

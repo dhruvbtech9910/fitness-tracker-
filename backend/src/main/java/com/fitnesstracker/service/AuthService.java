@@ -6,8 +6,8 @@ import com.fitnesstracker.dto.RegisterRequest;
 import com.fitnesstracker.entity.Role;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.exception.BadRequestException;
-import com.fitnesstracker.repository.RoleRepository;
-import com.fitnesstracker.repository.UserRepository;
+import com.fitnesstracker.dao.RoleDao;
+import com.fitnesstracker.dao.UserDao;
 import com.fitnesstracker.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,16 +20,16 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * AuthService
- * Handles user login, registration, password hashing, and token generation.
+ * Handles user login, registration, password hashing, and token generation using JDBC DAOs.
  */
 @Service
 public class AuthService {
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
-    private RoleRepository roleRepository;
+    private RoleDao roleDao;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -49,8 +49,8 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
 
-        // Fetch user from database
-        User user = userRepository.findByEmail(request.getEmail())
+        // Fetch user from database via JDBC
+        User user = userDao.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("User not found with email: " + request.getEmail()));
 
         // Generate JWT token
@@ -64,8 +64,8 @@ public class AuthService {
      * Register a new user account with hashed password
      */
     public AuthResponse register(RegisterRequest request) {
-        // Check if email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
+        // Check if email already exists via JDBC
+        if (userDao.existsByEmail(request.getEmail())) {
             throw new BadRequestException("An account with email " + request.getEmail() + " already exists.");
         }
 
@@ -75,13 +75,13 @@ public class AuthService {
             roleName = "System Admin";
         }
 
-        // Find or create role entity
-        java.util.Optional<Role> roleOpt = roleRepository.findByName(roleName);
+        // Find or create role entity via JDBC
+        java.util.Optional<Role> roleOpt = roleDao.findByName(roleName);
         Role role;
         if (roleOpt.isPresent()) {
             role = roleOpt.get();
         } else {
-            role = roleRepository.save(new Role(roleName));
+            role = roleDao.save(new Role(roleName));
         }
 
         // Create new User entity
@@ -108,8 +108,8 @@ public class AuthService {
         user.setJoinedDate(LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM yyyy")));
         user.setAvatar("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80");
 
-        // Save user to MySQL database
-        User savedUser = userRepository.save(user);
+        // Save user to MySQL database via JDBC
+        User savedUser = userDao.save(user);
 
         // Generate JWT token
         String token = jwtUtil.generateToken(savedUser.getEmail());

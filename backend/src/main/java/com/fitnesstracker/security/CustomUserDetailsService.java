@@ -1,7 +1,7 @@
 package com.fitnesstracker.security;
 
 import com.fitnesstracker.entity.User;
-import com.fitnesstracker.repository.UserRepository;
+import com.fitnesstracker.dao.UserDao;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,18 +14,18 @@ import java.util.List;
 
 /**
  * CustomUserDetailsService
- * Bridges our User entity and database with Spring Security's authentication system.
+ * Bridges our User entity and database via JDBC UserDao with Spring Security's authentication system.
  */
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        // Find user by email in database
-        User user = userRepository.findByEmail(email)
+        // Find user by email using JDBC
+        User user = userDao.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
         // Determine user authority (ROLE_ADMIN or ROLE_USER)

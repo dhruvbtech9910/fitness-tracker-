@@ -1,48 +1,41 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.ChallengeDao;
+import com.fitnesstracker.dao.UserDao;
 import com.fitnesstracker.entity.Challenge;
-import com.fitnesstracker.entity.ChallengeParticipant;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.exception.ResourceNotFoundException;
-import com.fitnesstracker.repository.ChallengeParticipantRepository;
-import com.fitnesstracker.repository.ChallengeRepository;
-import com.fitnesstracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * ChallengeService
- * Handles community challenges, joining challenges, daily check-ins, and participant progress.
+ * Handles community challenges, joining challenges, daily check-ins, and participant progress via JDBC ChallengeDao.
  */
 @Service
 public class ChallengeService {
 
     @Autowired
-    private ChallengeRepository challengeRepository;
+    private ChallengeDao challengeDao;
 
     @Autowired
-    private ChallengeParticipantRepository participantRepository;
-
-    @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     /**
      * Retrieve all active challenges
      */
     public List<Challenge> getAllChallenges() {
-        return challengeRepository.findAllByOrderByIdDesc();
+        return challengeDao.findAll();
     }
 
     /**
      * Retrieve challenge by ID
      */
     public Challenge getChallengeById(Long id) {
-        return challengeRepository.findById(id)
+        return challengeDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Challenge not found with id: " + id));
     }
 
@@ -58,82 +51,42 @@ public class ChallengeService {
         if (challenge.getRequiredCheckIns() == null) {
             challenge.setRequiredCheckIns(challenge.getDurationDays() != null ? challenge.getDurationDays() : 14);
         }
-        return challengeRepository.save(challenge);
+        return challengeDao.save(challenge);
     }
 
     /**
-     * Join an active challenge
+     * Join an active challenge using JDBC transaction
      */
     public Challenge joinChallenge(Long id, String userEmail) {
-        Challenge challenge = getChallengeById(id);
-        challenge.setJoined(true);
-        challenge.setParticipants(challenge.getParticipants() + 1);
-
+        Long userId = null;
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
             if (userOpt.isPresent()) {
-                User user = userOpt.get();
-                Optional<ChallengeParticipant> existingPart = participantRepository.findByChallengeIdAndUserId(id, user.getId());
-                if (existingPart.isEmpty()) {
-                    ChallengeParticipant participant = new ChallengeParticipant(challenge, user);
-                    participant.setJoinedDate(LocalDate.now().toString());
-                    participantRepository.save(participant);
-                }
+                userId = userOpt.get().getId();
             }
         }
-
-        return challengeRepository.save(challenge);
+        return challengeDao.joinChallenge(id, userId);
     }
 
     /**
-     * Daily check-in towards challenge completion
+     * Daily check-in towards challenge completion using JDBC transaction
      */
     public Challenge checkInChallenge(Long id, String userEmail) {
-        Challenge challenge = getChallengeById(id);
-
-        int currentCheckIns = challenge.getCheckIns() != null ? challenge.getCheckIns() : 0;
-        int nextCheckIns = currentCheckIns + 1;
-        challenge.setCheckIns(nextCheckIns);
-
-        int required = challenge.getRequiredCheckIns() != null ? challenge.getRequiredCheckIns() : 14;
-        int computedProgress = Math.min((int) Math.round(((double) nextCheckIns / required) * 100), 100);
-        challenge.setProgress(computedProgress);
-        challenge.setCompleted(computedProgress >= 100);
-
+        Long userId = null;
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
             if (userOpt.isPresent()) {
-                User user = userOpt.get();
-                Optional<ChallengeParticipant> partOpt = participantRepository.findByChallengeIdAndUserId(id, user.getId());
-                if (partOpt.isPresent()) {
-                    ChallengeParticipant part = partOpt.get();
-                    part.setCheckIns(nextCheckIns);
-                    part.setProgress(computedProgress);
-                    part.setCompleted(computedProgress >= 100);
-                    participantRepository.save(part);
-                }
+                userId = userOpt.get().getId();
             }
         }
-
-        return challengeRepository.save(challenge);
+        return challengeDao.checkIn(id, userId);
     }
 
     /**
      * Retrieve challenges the user is participating in
      */
     public List<Challenge> getMyChallenges(String userEmail) {
-        if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
-            if (userOpt.isPresent()) {
-                List<ChallengeParticipant> parts = participantRepository.findByUserId(userOpt.get().getId());
-                List<Challenge> result = new ArrayList<>();
-                for (ChallengeParticipant p : parts) {
-                    result.add(p.getChallenge());
-                }
-                return result;
-            }
-        }
-        return challengeRepository.findAll();
+        return challengeDao.findAll();
     }
 
     /**
@@ -141,6 +94,9 @@ public class ChallengeService {
      */
     public void deleteChallenge(Long id) {
         Challenge challenge = getChallengeById(id);
-        challengeRepository.delete(challenge);
+        boolean deleted = challengeDao.delete(challenge.getId());
+        if (!deleted) {
+            throw new RuntimeException("Failed to delete challenge with id: " + id);
+        }
     }
 }

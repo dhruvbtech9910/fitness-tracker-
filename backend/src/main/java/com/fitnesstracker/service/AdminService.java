@@ -1,14 +1,13 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.AdminDao;
+import com.fitnesstracker.dao.RoleDao;
+import com.fitnesstracker.dao.UserDao;
 import com.fitnesstracker.entity.FitnessContent;
 import com.fitnesstracker.entity.Role;
 import com.fitnesstracker.entity.SystemSetting;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.exception.ResourceNotFoundException;
-import com.fitnesstracker.repository.FitnessContentRepository;
-import com.fitnesstracker.repository.RoleRepository;
-import com.fitnesstracker.repository.SystemSettingRepository;
-import com.fitnesstracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,22 +19,19 @@ import java.util.Optional;
 
 /**
  * AdminService
- * Provides administrative control over users, content curation, and system configurations.
+ * Provides administrative control over users, content curation, and system configurations via JDBC DAOs.
  */
 @Service
 public class AdminService {
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     @Autowired
-    private RoleRepository roleRepository;
+    private RoleDao roleDao;
 
     @Autowired
-    private FitnessContentRepository contentRepository;
-
-    @Autowired
-    private SystemSettingRepository settingRepository;
+    private AdminDao adminDao;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -44,7 +40,7 @@ public class AdminService {
      * Retrieve all registered users
      */
     public List<User> getAllUsers() {
-        return userRepository.findAll();
+        return userDao.findAll();
     }
 
     /**
@@ -58,8 +54,8 @@ public class AdminService {
         }
 
         String roleName = user.getRole() != null ? user.getRole() : "Athlete";
-        Role role = roleRepository.findByName(roleName)
-                .orElseGet(() -> roleRepository.save(new Role(roleName)));
+        Role role = roleDao.findByName(roleName)
+                .orElseGet(() -> roleDao.save(new Role(roleName)));
         user.setUserRole(role);
         user.setRole(roleName);
         user.setStatus("Active");
@@ -68,14 +64,14 @@ public class AdminService {
         user.setTotalCaloriesBurned(0);
         user.setJoinedDate(LocalDate.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy")));
 
-        return userRepository.save(user);
+        return userDao.save(user);
     }
 
     /**
      * Update user details or toggle active/suspended status
      */
     public User updateUser(Long id, User updates) {
-        User user = userRepository.findById(id)
+        User user = userDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
         if (updates.getName() != null) user.setName(updates.getName());
@@ -83,53 +79,57 @@ public class AdminService {
         if (updates.getRole() != null) user.setRole(updates.getRole());
         if (updates.getStatus() != null) user.setStatus(updates.getStatus());
 
-        return userRepository.save(user);
+        return userDao.update(user);
     }
 
     /**
      * Delete user account permanently
      */
     public void deleteUser(Long id) {
-        User user = userRepository.findById(id)
+        User user = userDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-        userRepository.delete(user);
+        boolean deleted = userDao.delete(user.getId());
+        if (!deleted) {
+            throw new RuntimeException("Failed to delete user with id: " + id);
+        }
     }
 
     /**
      * Retrieve curated workout content
      */
     public List<FitnessContent> getAllCuratedContent() {
-        return contentRepository.findAll();
+        return adminDao.findAllContent();
     }
 
     /**
      * Create curated workout content
      */
     public FitnessContent createCuratedContent(FitnessContent content) {
-        return contentRepository.save(content);
+        return adminDao.saveContent(content);
     }
 
     /**
      * Delete curated content
      */
     public void deleteCuratedContent(Long id) {
-        FitnessContent content = contentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Content not found with id: " + id));
-        contentRepository.delete(content);
+        boolean deleted = adminDao.deleteContent(id);
+        if (!deleted) {
+            throw new ResourceNotFoundException("Content not found with id: " + id);
+        }
     }
 
     /**
      * Retrieve all system settings
      */
     public List<SystemSetting> getSystemSettings() {
-        return settingRepository.findAll();
+        return adminDao.findAllSettings();
     }
 
     /**
      * Update or insert system setting
      */
     public SystemSetting updateSystemSetting(String key, String value, String description) {
-        Optional<SystemSetting> settingOpt = settingRepository.findBySettingKey(key);
+        Optional<SystemSetting> settingOpt = adminDao.findSettingByKey(key);
         SystemSetting setting;
         if (settingOpt.isPresent()) {
             setting = settingOpt.get();
@@ -138,6 +138,6 @@ public class AdminService {
         } else {
             setting = new SystemSetting(key, value, description);
         }
-        return settingRepository.save(setting);
+        return adminDao.saveSetting(setting);
     }
 }

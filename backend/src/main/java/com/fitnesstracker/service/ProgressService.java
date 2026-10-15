@@ -1,14 +1,14 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.GoalDao;
+import com.fitnesstracker.dao.ProgressDao;
+import com.fitnesstracker.dao.UserDao;
+import com.fitnesstracker.dao.WorkoutDao;
 import com.fitnesstracker.dto.ProgressSummaryDto;
 import com.fitnesstracker.entity.FitnessGoal;
 import com.fitnesstracker.entity.Progress;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.entity.Workout;
-import com.fitnesstracker.repository.FitnessGoalRepository;
-import com.fitnesstracker.repository.ProgressRepository;
-import com.fitnesstracker.repository.UserRepository;
-import com.fitnesstracker.repository.WorkoutRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -17,37 +17,41 @@ import java.util.Optional;
 
 /**
  * ProgressService
- * Manages personal record entries and aggregates dashboard telemetry.
+ * Manages personal record entries and aggregates dashboard telemetry via JDBC DAOs.
  */
 @Service
 public class ProgressService {
 
     @Autowired
-    private ProgressRepository progressRepository;
+    private ProgressDao progressDao;
 
     @Autowired
-    private WorkoutRepository workoutRepository;
+    private WorkoutDao workoutDao;
 
     @Autowired
-    private FitnessGoalRepository goalRepository;
+    private GoalDao goalDao;
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     /**
      * Get all personal records and milestones
      */
     public List<Progress> getAllProgress() {
-        return progressRepository.findAllByOrderByIdDesc();
+        return progressDao.findAll();
     }
 
     /**
      * Add a new personal record entry
      */
     public Progress addProgress(Progress progress, String userEmail) {
+        Long userId = null;
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
-            userOpt.ifPresent(progress::setUser);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
+            if (userOpt.isPresent()) {
+                userId = userOpt.get().getId();
+                progress.setUser(userOpt.get());
+            }
         }
         if (progress.getDate() == null) {
             progress.setDate("Today");
@@ -55,14 +59,14 @@ public class ProgressService {
         if (progress.getBadge() == null) {
             progress.setBadge("Gold");
         }
-        return progressRepository.save(progress);
+        return progressDao.save(progress, userId);
     }
 
     /**
      * Aggregate telemetry data for summary cards
      */
     public ProgressSummaryDto getProgressSummary(String userEmail) {
-        List<Workout> workouts = workoutRepository.findAll();
+        List<Workout> workouts = workoutDao.findAll();
         int totalWorkouts = workouts.size();
         int totalMinutes = 0;
         int totalCalories = 0;
@@ -74,15 +78,15 @@ public class ProgressService {
 
         int activeStreak = 14;
         if (userEmail != null) {
-            Optional<User> userOpt = userRepository.findByEmail(userEmail);
+            Optional<User> userOpt = userDao.findByEmail(userEmail);
             if (userOpt.isPresent() && userOpt.get().getActiveStreak() != null) {
                 activeStreak = userOpt.get().getActiveStreak();
             }
         }
 
-        int prCount = (int) progressRepository.count();
+        int prCount = (int) progressDao.count();
 
-        List<FitnessGoal> goals = goalRepository.findAll();
+        List<FitnessGoal> goals = goalDao.findAll();
         int completedGoals = 0;
         int activeGoals = 0;
 

@@ -1,0 +1,52 @@
+# Online Fitness Tracking Application
+
+A web-based fitness tracking system that allows users to log workouts, set fitness goals, monitor progress, and participate in fitness challenges. Administrators can manage users and fitness content.
+
+## Technology Stack
+
+* Frontend: React.js, JavaScript, Tailwind CSS, Vite
+* Backend: Java, Spring Boot, Spring Data JPA
+* Database: MySQL
+* Build Tool: Maven
+
+## Project Structure
+
+* `frontend/` — React frontend
+* `backend/` — Java Spring Boot backend
+* `database/` — SQL database setup
+
+## Requirements
+
+* Node.js and npm
+* Java JDK
+* Maven
+* MySQL
+
+## How to Run
+
+### Frontend
+
+Open a terminal in the `frontend` directory and run:
+
+```bash
+npm install
+npm run dev
+```
+
+### Backend
+
+Configure your MySQL database and application properties first.
+
+Open a terminal in the `backend` directory and run:
+
+```bash
+.\mvnw.cmd spring-boot:run
+```
+
+### Database
+
+Import `database/fitness_tracker.sql` into MySQL and configure the database connection for the backend.
+
+## Project Status
+
+Under development.

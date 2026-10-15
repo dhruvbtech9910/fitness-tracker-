@@ -1,26 +1,26 @@
 package com.fitnesstracker.service;
 
+import com.fitnesstracker.dao.UserDao;
 import com.fitnesstracker.entity.User;
 import com.fitnesstracker.exception.ResourceNotFoundException;
-import com.fitnesstracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * UserService
- * Manages user profile queries, profile updates, and bio metric calculations.
+ * Manages user profile queries, profile updates, and bio metric calculations via JDBC UserDao.
  */
 @Service
 public class UserService {
 
     @Autowired
-    private UserRepository userRepository;
+    private UserDao userDao;
 
     /**
      * Retrieve current profile by email
      */
     public User getProfileByEmail(String email) {
-        return userRepository.findByEmail(email)
+        return userDao.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
     }
 
@@ -55,14 +55,14 @@ public class UserService {
             user.setAvatar(updates.getAvatar());
         }
 
-        return userRepository.save(user);
+        return userDao.update(user);
     }
 
     /**
      * Find user by ID
      */
     public User getUserById(Long id) {
-        return userRepository.findById(id)
+        return userDao.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 }
